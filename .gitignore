@@ -1,0 +1,30 @@
+# nix / direnv
+.direnv/
+.envrc
+result
+result-*
+
+# node
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# local db / generated data
+/data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# editor / os
+.DS_Store
+.vscode/
+.idea/
+*.swp
