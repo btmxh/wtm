@@ -33,9 +33,11 @@ import { tagsPage } from "./views/tags.ts";
 import { importPage } from "./views/import.ts";
 import { jobsListPage, jobDetailPage } from "./views/jobs.ts";
 import { statsPage } from "./views/stats.ts";
-import { createJob, getJob, listJobs } from "./jobs.ts";
+import { oshisPage, type OshiRowWithCounts } from "./views/oshis.ts";
+import { createJob, cancelJob, getJob, listJobs } from "./jobs.ts";
 import { resolveClipperFromUrl, runImport, type MatchScope } from "./importJob.ts";
 import { runAutotag } from "./autotagJob.ts";
+import { runClassify } from "./classifyJob.ts";
 
 function filtersFromQuery(q: Record<string, string>): FilterQuery {
   return {
@@ -241,6 +243,27 @@ app.post("/import/oshis", async (c) => {
   if (name && aliases.length > 0) upsertOshi(db, name, aliases);
 
   const qs = new URLSearchParams();
+app.get("/oshis", (c) => {
+  const oshis = listOshiSummaries(db);
+  const rows: OshiRowWithCounts[] = listOshis(db).map((o) => {
+    const summary = oshis.find((s) => s.id === o.id);
+    return { ...o, clipCount: summary?.clipCount ?? 0, watchedCount: summary?.watchedCount ?? 0 };
+  });
+  const body = oshisPage(rows);
+  return c.html(layout({ title: "oshis · wtm", oshis, body }));
+});
+
+app.post("/oshis", async (c) => {
+  const form = await c.req.parseBody();
+  const name = String(form.name ?? "").trim();
+  const aliases = String(form.aliases ?? "")
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+  if (name && aliases.length > 0) upsertOshi(db, name, aliases);
+  return c.redirect("/oshis", 303);
+});
+
   if (form.clipperId) qs.set("clipperId", String(form.clipperId));
   if (form.handle) qs.set("handle", String(form.handle));
   if (form.title) qs.set("title", String(form.title));
@@ -254,12 +277,26 @@ app.post("/jobs/import", async (c) => {
   const oshiIds = (Array.isArray(oshiIdField) ? oshiIdField : oshiIdField ? [oshiIdField] : []).map(Number);
   const matchScope = (form.matchScope === "title" ? "title" : "title+description") as MatchScope;
 
-  const job = createJob("import", (report) => runImport(db, { clipperId, oshiIds, matchScope }, report));
+  const job = createJob("import", async (report, signal) => {
+    await runImport(db, { clipperId, oshiIds, matchScope }, report, signal);
+    // New clips land unverified (heuristic-only kind) - chase them with a
+    // classify run right away instead of leaving that for a manual click.
+    // A separate job (not folded into this one) so it keeps its own
+    // progress/log/id like any other classify run.
+    if (!signal.aborted) {
+      createJob("classify", (r, s) => runClassify(db, r, s));
+    }
+  });
   return c.redirect(`/jobs/${job.id}`, 303);
 });
 
 app.post("/jobs/autotag", (c) => {
-  const job = createJob("autotag", (report) => runAutotag(db, report));
+  const job = createJob("autotag", (report, signal) => runAutotag(db, report, signal));
+  return c.redirect(`/jobs/${job.id}`, 303);
+});
+
+app.post("/jobs/classify", (c) => {
+  const job = createJob("classify", (report, signal) => runClassify(db, report, signal));
   return c.redirect(`/jobs/${job.id}`, 303);
 });
 
@@ -301,3 +338,23 @@ const port = Number(process.env.PORT ?? 4173);
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`wtm running at http://localhost:${info.port}`);
 });
+app.post("/jobs/:id/cancel", (c) => {
+  const id = c.req.param("id");
+  cancelJob(id);
+  return c.redirect(`/jobs/${id}`, 303);
+});
+
+app.get("/jobs/events", (c) => {
+  return streamSSE(c, async (stream) => {
+    let lastSnapshot = "";
+    while (!stream.aborted) {
+      const snapshot = JSON.stringify(listJobs());
+      if (snapshot !== lastSnapshot) {
+        await stream.writeSSE({ data: snapshot });
+        lastSnapshot = snapshot;
+      }
+      await stream.sleep(750);
+    }
+  });
+});
+

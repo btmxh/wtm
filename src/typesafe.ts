@@ -28,6 +28,7 @@ export interface NoulResult {
 export async function askNouls(
   state: unknown,
   questions: Record<string, NoulQuestion>,
+  signal?: AbortSignal,
 ): Promise<NoulResult> {
   const res = await fetch(API_URL, {
     method: "POST",
@@ -36,6 +37,7 @@ export async function askNouls(
       authorization: `Bearer ${apiKey()}`,
     },
     body: JSON.stringify({ state, model: MODEL, questions }),
+    signal,
   });
   if (!res.ok) {
     const body = await res.text();

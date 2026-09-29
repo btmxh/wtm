@@ -49,6 +49,7 @@ async function main() {
       (patch) => {
         if (patch.message) console.log(`  ${patch.message}`);
       },
+      new AbortController().signal,
     );
   }
 

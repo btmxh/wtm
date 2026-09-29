@@ -58,6 +58,7 @@ export function layout(opts: {
       <a class="manage-link" href="/stats">Progress</a>
       <a class="manage-link" href="/import">Import</a>
       <a class="manage-link" href="/jobs">Jobs</a>
+      <a class="manage-link" href="/oshis">Oshis</a>
       <a class="manage-link" href="/tags">Tags</a>
     </nav>
   </header>

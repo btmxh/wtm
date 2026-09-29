@@ -36,7 +36,12 @@ function resolvedPanel(resolved: ResolvedClipperInfo, oshis: OshiRow[]) {
         <input type="hidden" name="clipperId" value="${resolved.clipperId}" />
 
         <fieldset class="oshi-checkboxes">
-          <legend>Oshis to check for while tagging (everything still gets imported)</legend>
+          <legend>Auto-tag matches for</legend>
+          <p class="oshi-checkboxes__hint">
+            Every video/short from this channel is imported no matter what's checked here - this only decides which
+            oshis get automatically tagged onto matching clips. Unchecking an oshi does <strong>not</strong> exclude
+            their clips, it just leaves them untagged.
+          </p>
           ${oshis.length === 0
             ? html`<p class="empty">No oshis yet - add one below.</p>`
             : oshis.map(

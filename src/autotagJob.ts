@@ -13,7 +13,7 @@ const CONCURRENCY = 5;
 // against observed results.
 const THRESHOLD = 0.7;
 
-export async function runAutotag(db: DatabaseSync, onProgress: JobReport): Promise<void> {
+export async function runAutotag(db: DatabaseSync, onProgress: JobReport, signal: AbortSignal): Promise<void> {
   const tags = listTaggableTags(db);
   if (tags.length === 0) {
     onProgress({ message: "no tags have a prompt set - add one via /tags before auto-tagging." });
@@ -29,9 +29,12 @@ export async function runAutotag(db: DatabaseSync, onProgress: JobReport): Promi
   let requests = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let failed = 0;
 
   async function worker(queue: typeof clips) {
     for (const clip of queue) {
+      if (signal.aborted) return;
+
       const attachedIds = listAttachedTagIds(db, clip.id);
       const pending = tags.filter((t) => !attachedIds.has(t.id));
       if (pending.length === 0) {
@@ -49,13 +52,31 @@ export async function runAutotag(db: DatabaseSync, onProgress: JobReport): Promi
         };
       }
 
-      const { answers, usage } = await askNouls(
-        { title: clip.title, description: clip.description },
-        questions,
-      );
+      // A single failed request used to reject this worker's whole
+      // Promise.all bucket, killing the job while sibling workers kept
+      // running unsupervised in the background - see the same fix in
+      // classifyJob.ts. Skip the clip (it'll be picked up again next run)
+      // instead of taking the whole batch down.
+      let result: Awaited<ReturnType<typeof askNouls>>;
+      try {
+        result = await askNouls({ title: clip.title, description: clip.description }, questions, signal);
+      } catch (err) {
+        if (signal.aborted) return;
+        failed++;
+        const reason = err instanceof Error ? err.message : String(err);
+        onProgress({ message: `clip ${clip.id}: skipped (${reason}), will retry next run` });
+        checked++;
+        onProgress({ current: checked });
+        continue;
+      }
+
+      const { answers, usage } = result;
       requests++;
       inputTokens += usage.inputTokens;
       outputTokens += usage.outputTokens;
+      onProgress({
+        metaDelta: { typesafeInputTokens: usage.inputTokens, typesafeOutputTokens: usage.outputTokens },
+      });
 
       const matched: string[] = [];
       for (const t of pending) {
@@ -81,7 +102,9 @@ export async function runAutotag(db: DatabaseSync, onProgress: JobReport): Promi
   clips.forEach((c, i) => buckets[i % CONCURRENCY].push(c));
   await Promise.all(buckets.map(worker));
 
-  onProgress({ message: `checked ${checked} clip(s), attached ${attached} llm tag(s)` });
+  onProgress({
+    message: `checked ${checked} clip(s), attached ${attached} llm tag(s)${failed > 0 ? `, ${failed} failed (will retry next run)` : ""}`,
+  });
   onProgress({
     message: `usage: ${requests} request(s), ${inputTokens} input token(s), ${outputTokens} output token(s)`,
   });
