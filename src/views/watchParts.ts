@@ -63,8 +63,9 @@ export function tagsBlock(clip: ClipDetail, availableTags: Tag[], f: FilterQuery
           </form>
         `,
       )}
-      ${availableTags.length > 0
-        ? html`
+      ${
+        availableTags.length > 0
+          ? html`
             <form class="tag-add" method="post" action="/clips/${clip.id}/tags">
               ${hiddenFilterInputs(f)}
               <select name="tagId">
@@ -73,7 +74,8 @@ export function tagsBlock(clip: ClipDetail, availableTags: Tag[], f: FilterQuery
               <button type="submit">+</button>
             </form>
           `
-        : html``}
+          : html``
+      }
       <a class="manage-tags-link" href="/tags">manage tags</a>
     </div>
   `;

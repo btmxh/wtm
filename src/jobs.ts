@@ -21,9 +21,12 @@ export interface Job {
   finishedAt?: string;
 }
 
-export interface JobReport {
-  (patch: { current?: number; total?: number; message?: string; metaDelta?: Record<string, number> }): void;
-}
+export type JobReport = (patch: {
+  current?: number;
+  total?: number;
+  message?: string;
+  metaDelta?: Record<string, number>;
+}) => void;
 
 const MAX_HISTORY = 20;
 const jobs = new Map<string, Job>();
@@ -41,10 +44,7 @@ function pruneHistory(): void {
   }
 }
 
-export function createJob(
-  type: JobType,
-  work: (report: JobReport, signal: AbortSignal) => Promise<void>,
-): Job {
+export function createJob(type: JobType, work: (report: JobReport, signal: AbortSignal) => Promise<void>): Job {
   const job: Job = {
     id: crypto.randomUUID(),
     type,

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed by `pnpm install` (the prepare script sets core.hooksPath).
+# Skip once with `git commit --no-verify`.
+exec pnpm --silent check

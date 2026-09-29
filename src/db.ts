@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -11,9 +11,7 @@ const SCHEMA_PATH = fileURLToPath(new URL("./schema.sql", import.meta.url));
 // schema.sql so that file's CREATE INDEX statements can assume the column
 // already exists.
 function migrate(db: DatabaseSync): void {
-  const clipsTable = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'clips'")
-    .get();
+  const clipsTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'clips'").get();
   if (!clipsTable) return; // fresh db - schema.sql below creates it with every column
 
   const columns = db.prepare("PRAGMA table_info(clips)").all() as { name: string }[];
@@ -26,9 +24,7 @@ function migrate(db: DatabaseSync): void {
   db.exec("DROP TABLE IF EXISTS oshi_groups");
   db.exec("DROP TABLE IF EXISTS groups");
 
-  const tagsTable = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tags'")
-    .get();
+  const tagsTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tags'").get();
   if (tagsTable) {
     const tagColumns = db.prepare("PRAGMA table_info(tags)").all() as { name: string }[];
     if (!tagColumns.some((c) => c.name === "prompt")) {
@@ -65,8 +61,8 @@ export function upsertOshi(db: DatabaseSync, name: string, aliases: string[]): n
 export function listOshisByIds(db: DatabaseSync, ids: number[]): OshiRow[] {
   if (ids.length === 0) return [];
   const placeholders = ids.map((_, i) => `:id${i}`).join(",");
-  const params: Record<string, unknown> = {};
-  ids.forEach((id, i) => (params[`id${i}`] = id));
+  const params: Record<string, SQLInputValue> = {};
+  for (const [i, id] of ids.entries()) params[`id${i}`] = id;
   const rows = db
     .prepare(`SELECT id, name, aliases FROM oshis WHERE id IN (${placeholders})`)
     .all(params) as unknown as { id: number; name: string; aliases: string }[];
@@ -185,9 +181,7 @@ export function setVerifiedKind(db: DatabaseSync, clipId: number, kind: "short" 
 // manual/LLM-sourced links a person may have already corrected.
 export function setHeuristicClipOshis(db: DatabaseSync, clipId: number, oshiIds: number[]): void {
   db.prepare("DELETE FROM clip_oshis WHERE clip_id = ? AND source = 'heuristic'").run(clipId);
-  const insert = db.prepare(
-    "INSERT OR IGNORE INTO clip_oshis (clip_id, oshi_id, source) VALUES (?, ?, 'heuristic')",
-  );
+  const insert = db.prepare("INSERT OR IGNORE INTO clip_oshis (clip_id, oshi_id, source) VALUES (?, ?, 'heuristic')");
   for (const oshiId of oshiIds) insert.run(clipId, oshiId);
 }
 
@@ -225,7 +219,9 @@ export function listAttachedTagIds(db: DatabaseSync, clipId: number): Set<number
 // Records an LLM judgment as a clip_tags row - only called for tags not
 // already linked to the clip by any source, so no conflict handling needed.
 export function setLlmClipTag(db: DatabaseSync, clipId: number, tagId: number, confidence: number): void {
-  db.prepare(
-    "INSERT OR IGNORE INTO clip_tags (clip_id, tag_id, source, confidence) VALUES (?, ?, 'llm', ?)",
-  ).run(clipId, tagId, confidence);
+  db.prepare("INSERT OR IGNORE INTO clip_tags (clip_id, tag_id, source, confidence) VALUES (?, ?, 'llm', ?)").run(
+    clipId,
+    tagId,
+    confidence,
+  );
 }

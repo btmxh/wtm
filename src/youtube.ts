@@ -44,7 +44,14 @@ export interface ChannelInfo {
   handle?: string;
 }
 
-function channelInfoFromItem(item: any): ChannelInfo {
+// The subset of a channels.list item (part=snippet,contentDetails) we read.
+interface ChannelItem {
+  id: string;
+  snippet: { title: string; description: string; customUrl?: string };
+  contentDetails: { relatedPlaylists: { uploads: string } };
+}
+
+function channelInfoFromItem(item: ChannelItem): ChannelInfo {
   const customUrl: string | undefined = item.snippet.customUrl;
   return {
     channelId: item.id,
@@ -188,9 +195,7 @@ export async function* fetchPlaylistItems(
 }
 
 function parseIso8601Duration(duration: string): number {
-  const match = duration.match(
-    /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/,
-  );
+  const match = duration.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
   if (!match) return 0;
   const [, h, m, s] = match;
   return (Number(h) || 0) * 3600 + (Number(m) || 0) * 60 + (Number(s) || 0);
@@ -249,7 +254,7 @@ export async function fetchDurations(
   }
 
   const buckets: string[][][] = Array.from({ length: DURATION_FETCH_CONCURRENCY }, () => []);
-  chunks.forEach((c, i) => buckets[i % DURATION_FETCH_CONCURRENCY].push(c));
+  for (const [i, c] of chunks.entries()) buckets[i % DURATION_FETCH_CONCURRENCY].push(c);
   await Promise.all(buckets.map(worker));
 
   return durations;

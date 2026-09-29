@@ -107,7 +107,9 @@ a {
   border: 1px solid var(--line);
   font-size: 0.875rem;
   color: var(--ink-muted);
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .tab:hover {
@@ -575,6 +577,7 @@ main {
 
 .feed {
   height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh is the fallback for browsers without dvh */
   height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(20rem, 1fr);
@@ -885,7 +888,7 @@ main {
    one-line peek, and the sidebar becomes a bottom sheet over the stage.
    (Landscape phones keep the side-by-side layout - stacking there left
    the video a sliver.) */
-@media (max-aspect-ratio: 1/1), (max-width: 40rem) {
+@media (max-aspect-ratio: 1 / 1), (max-width: 40rem) {
   .feed {
     /* minmax(0) so the peek's nowrap title can't widen the column */
     grid-template-columns: minmax(0, 1fr);
@@ -1619,6 +1622,7 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   * {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every component's own transition */
     transition: none !important;
   }
 }

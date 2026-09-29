@@ -13,9 +13,10 @@ export function oshisPage(oshis: OshiRowWithCounts[]) {
     <div class="tags-manage">
       <h1 class="heading">Oshis</h1>
 
-      ${oshis.length === 0
-        ? html`<p class="empty">No oshis yet - add one below.</p>`
-        : html`
+      ${
+        oshis.length === 0
+          ? html`<p class="empty">No oshis yet - add one below.</p>`
+          : html`
             <ul class="tag-list">
               ${oshis.map(
                 (o) => html`
@@ -35,7 +36,8 @@ export function oshisPage(oshis: OshiRowWithCounts[]) {
                 `,
               )}
             </ul>
-          `}
+          `
+      }
 
       <form class="tag-create" method="post" action="/oshis">
         <div class="tag-create__fields">

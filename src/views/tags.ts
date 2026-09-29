@@ -13,9 +13,10 @@ export function tagsPage(tags: TagSummary[]) {
         <a class="run-autotag__jobs-link" href="/jobs">view job history</a>
       </form>
 
-      ${tags.length === 0
-        ? html`<p class="empty">No tags yet - add one below.</p>`
-        : html`
+      ${
+        tags.length === 0
+          ? html`<p class="empty">No tags yet - add one below.</p>`
+          : html`
             <ul class="tag-list">
               ${tags.map(
                 (t) => html`
@@ -37,7 +38,8 @@ export function tagsPage(tags: TagSummary[]) {
                 `,
               )}
             </ul>
-          `}
+          `
+      }
 
       <form class="tag-create" method="post" action="/tags">
         <div class="tag-create__fields">

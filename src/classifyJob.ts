@@ -48,7 +48,7 @@ export async function runClassify(db: DatabaseSync, onProgress: JobReport, signa
   }
 
   const buckets: (typeof clips)[] = Array.from({ length: CONCURRENCY }, () => []);
-  clips.forEach((c, i) => buckets[i % CONCURRENCY].push(c));
+  for (const [i, c] of clips.entries()) buckets[i % CONCURRENCY].push(c);
   await Promise.all(buckets.map(worker));
 
   onProgress({

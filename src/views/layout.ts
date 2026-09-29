@@ -1,4 +1,4 @@
-import { html, raw } from "../html.ts";
+import { html } from "../html.ts";
 import { oshiAccent } from "../oshiColor.ts";
 import type { OshiSummary } from "../queries.ts";
 

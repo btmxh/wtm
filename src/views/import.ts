@@ -42,16 +42,18 @@ function resolvedPanel(resolved: ResolvedClipperInfo, oshis: OshiRow[]) {
             oshis get automatically tagged onto matching clips. Unchecking an oshi does <strong>not</strong> exclude
             their clips, it just leaves them untagged.
           </p>
-          ${oshis.length === 0
-            ? html`<p class="empty">No oshis yet - add one below.</p>`
-            : oshis.map(
-                (o) => html`
+          ${
+            oshis.length === 0
+              ? html`<p class="empty">No oshis yet - add one below.</p>`
+              : oshis.map(
+                  (o) => html`
                   <label class="filter-pill">
                     <input type="checkbox" name="oshiId" value="${o.id}" checked />
                     <span>${o.name}</span>
                   </label>
                 `,
-              )}
+                )
+          }
         </fieldset>
 
         <fieldset class="scope-toggle">

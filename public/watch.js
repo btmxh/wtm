@@ -48,7 +48,7 @@
   // Raw postMessage("event":"command", ...) to a bare embed is unreliable -
   // the player only reacts to commands once handshaken via YouTube's own
   // IFrame Player API. Load the real API and let it manage that per player.
-  let apiReady = !!(window.YT && window.YT.Player);
+  let apiReady = !!window.YT?.Player;
   const pendingInits = [];
 
   function whenApiReady(fn) {
@@ -62,7 +62,7 @@
     document.head.appendChild(tag);
     window.onYouTubeIframeAPIReady = () => {
       apiReady = true;
-      pendingInits.splice(0).forEach((fn) => fn());
+      for (const fn of pendingInits.splice(0)) fn();
     };
   }
 

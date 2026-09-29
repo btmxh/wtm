@@ -14,8 +14,12 @@ The dev shell comes from the Nix flake (`nix develop`, or direnv via `.envrc`). 
 - `pnpm collect`: CLI import. It seeds oshis from `config/oshis.json`, resolves the channels in `config/clippers.json`, and imports their uploads.
 - `pnpm verify-shorts`: CLI run of the short/video classify pass.
 - `pnpm autotag`: CLI run of the LLM tagging pass.
+- `pnpm lint`: Biome lint plus a format check over TS, JS, CSS and JSON (`biome.json`). `pnpm format` applies the formatting and the safe lint fixes.
+- `pnpm typecheck`: `tsc` with no emit. The `tsconfig.json` sets `erasableSyntaxOnly` and `allowImportingTsExtensions`, so it enforces the rules below.
+- `pnpm test`: the `node:test` suite in `test/*.test.ts`. DB tests use `openDb(":memory:")`, and no test calls the network or needs `.env`.
+- `pnpm check`: lint, typecheck, then tests. The git pre-commit hook (`.githooks/pre-commit`, turned on by the `prepare` script at `pnpm install`) runs this, and so does CI (`.github/workflows/ci.yml`).
 
-There is no build step, bundler, tsconfig, type checker, linter, or test suite. TypeScript runs directly through `node --experimental-strip-types`. Type errors therefore only appear at runtime. Imports must use explicit `.ts` extensions, and code must only use erasable TS syntax (no enums, namespaces, or parameter properties). The database is `data/wtm.sqlite` (gitignored). Inspect it with `sqlite3 data/wtm.sqlite`.
+There is no build step or bundler. Node 24 runs TypeScript directly through its built-in type stripping, so type errors only appear at runtime unless you run `pnpm typecheck`. Imports must use explicit `.ts` extensions, and code must only use erasable TS syntax (no enums, namespaces, or parameter properties). The database is `data/wtm.sqlite` (gitignored). Inspect it with `sqlite3 data/wtm.sqlite`.
 
 ## Architecture
 

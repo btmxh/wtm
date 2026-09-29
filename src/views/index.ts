@@ -116,8 +116,10 @@ export function indexPage(opts: {
       <button type="submit">Filter</button>
     </form>
 
-    ${clips.length === 0
-      ? html`<p class="empty">Nothing here yet. Run the collector, or loosen the filters.</p>`
-      : html`<div class="shelf">${clips.map((c) => clipCard(c, oshisByClip.get(c.id) ?? [], filterQuery))}</div>`}
+    ${
+      clips.length === 0
+        ? html`<p class="empty">Nothing here yet. Run the collector, or loosen the filters.</p>`
+        : html`<div class="shelf">${clips.map((c) => clipCard(c, oshisByClip.get(c.id) ?? [], filterQuery))}</div>`
+    }
   `;
 }

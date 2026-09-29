@@ -2,15 +2,30 @@
   "name": "wtm",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "collect": "node --env-file=.env --experimental-strip-types src/collect.ts",
-    "verify-shorts": "node --env-file=.env --experimental-strip-types src/verify-shorts.ts",
-    "autotag": "node --env-file=.env --experimental-strip-types src/autotag.ts",
-    "dev": "node --env-file=.env --experimental-strip-types --watch src/server.ts"
+    "collect": "node --env-file=.env src/collect.ts",
+    "verify-shorts": "node --env-file=.env src/verify-shorts.ts",
+    "autotag": "node --env-file=.env src/autotag.ts",
+    "dev": "node --env-file=.env --watch src/server.ts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.9",
     "undici": "^8.11.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "^24.19.0",
+    "typescript": "^7.0.2"
   }
 }

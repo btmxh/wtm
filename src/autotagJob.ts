@@ -1,10 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import {
-  listClipsForTagging,
-  listTaggableTags,
-  listAttachedTagIds,
-  setLlmClipTag,
-} from "./db.ts";
+import { listClipsForTagging, listTaggableTags, listAttachedTagIds, setLlmClipTag } from "./db.ts";
 import { askNouls, type NoulQuestion } from "./typesafe.ts";
 import type { JobReport } from "./jobs.ts";
 
@@ -99,7 +94,7 @@ export async function runAutotag(db: DatabaseSync, onProgress: JobReport, signal
   }
 
   const buckets: (typeof clips)[] = Array.from({ length: CONCURRENCY }, () => []);
-  clips.forEach((c, i) => buckets[i % CONCURRENCY].push(c));
+  for (const [i, c] of clips.entries()) buckets[i % CONCURRENCY].push(c);
   await Promise.all(buckets.map(worker));
 
   onProgress({

@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 export interface OshiSummary {
   id: number;
@@ -63,12 +63,10 @@ export interface ClipListItem {
 
 export function listClips(db: DatabaseSync, filters: ClipFilters): ClipListItem[] {
   const where: string[] = [];
-  const params: Record<string, unknown> = {};
+  const params: Record<string, SQLInputValue> = {};
 
   if (filters.oshiId != null) {
-    where.push(
-      "c.id IN (SELECT clip_id FROM clip_oshis WHERE oshi_id = :oshiId)",
-    );
+    where.push("c.id IN (SELECT clip_id FROM clip_oshis WHERE oshi_id = :oshiId)");
     params.oshiId = filters.oshiId;
   }
   if (filters.clipperId != null) {
@@ -102,7 +100,7 @@ export function listClips(db: DatabaseSync, filters: ClipFilters): ClipListItem[
     ORDER BY c.published_at DESC
   `;
 
-  const rows = db.prepare(sql).all(params) as unknown as (ClipListItem & { watched: number })[];
+  const rows = db.prepare(sql).all(params) as unknown as (Omit<ClipListItem, "watched"> & { watched: number })[];
   return rows.map((r) => ({ ...r, watched: !!r.watched }));
 }
 
@@ -116,8 +114,8 @@ export function oshisForClips(db: DatabaseSync, clipIds: number[]): Map<number, 
   if (clipIds.length === 0) return map;
 
   const placeholders = clipIds.map((_, i) => `:id${i}`).join(",");
-  const params: Record<string, unknown> = {};
-  clipIds.forEach((id, i) => (params[`id${i}`] = id));
+  const params: Record<string, SQLInputValue> = {};
+  for (const [i, id] of clipIds.entries()) params[`id${i}`] = id;
 
   const rows = db
     .prepare(
@@ -178,8 +176,8 @@ export function tagsForClips(db: DatabaseSync, clipIds: number[]): Map<number, T
   if (clipIds.length === 0) return map;
 
   const placeholders = clipIds.map((_, i) => `:id${i}`).join(",");
-  const params: Record<string, unknown> = {};
-  clipIds.forEach((id, i) => (params[`id${i}`] = id));
+  const params: Record<string, SQLInputValue> = {};
+  for (const [i, id] of clipIds.entries()) params[`id${i}`] = id;
 
   const rows = db
     .prepare(
@@ -202,9 +200,7 @@ export function tagsForClips(db: DatabaseSync, clipIds: number[]): Map<number, T
 // Links an already-existing tag to a clip; the tag itself is managed
 // separately via the /tags page, not created ad hoc here.
 export function attachTagToClip(db: DatabaseSync, clipId: number, tagId: number): void {
-  db.prepare(
-    "INSERT OR IGNORE INTO clip_tags (clip_id, tag_id, source) VALUES (?, ?, 'manual')",
-  ).run(clipId, tagId);
+  db.prepare("INSERT OR IGNORE INTO clip_tags (clip_id, tag_id, source) VALUES (?, ?, 'manual')").run(clipId, tagId);
 }
 
 export function removeTagFromClip(db: DatabaseSync, clipId: number, tagId: number): void {

@@ -9,14 +9,19 @@ export function raw(value: string): SafeString {
   return new SafeString(value);
 }
 
-function escape(value: string): string {
+function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => {
     switch (c) {
-      case "&": return "&amp;";
-      case "<": return "&lt;";
-      case ">": return "&gt;";
-      case '"': return "&quot;";
-      default: return "&#39;";
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      default:
+        return "&#39;";
     }
   });
 }
@@ -25,7 +30,7 @@ function toHtml(value: unknown): string {
   if (value instanceof SafeString) return value.value;
   if (Array.isArray(value)) return value.map(toHtml).join("");
   if (value == null) return "";
-  return escape(String(value));
+  return escapeHtml(String(value));
 }
 
 // Tagged template that auto-escapes interpolated values. Nested html`` calls

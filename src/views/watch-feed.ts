@@ -1,13 +1,6 @@
 import { html, raw } from "../html.ts";
 import type { ClipDetail, ClipperSummary, OshiSummary, Tag, TagSummary } from "../queries.ts";
-import {
-  oshiPills,
-  tagsBlock,
-  takeawayBlock,
-  metaBlock,
-  filterQueryString,
-  type FilterQuery,
-} from "./watchParts.ts";
+import { oshiPills, tagsBlock, takeawayBlock, metaBlock, filterQueryString, type FilterQuery } from "./watchParts.ts";
 
 // What the client needs per queue entry to build a slide and its up-next
 // row - everything else about a clip comes from its server-rendered panel.
@@ -38,12 +31,7 @@ export function clipPanel(clip: ClipDetail, availableTags: Tag[], filters: Filte
   `;
 }
 
-function select(
-  name: string,
-  label: string,
-  current: string | undefined,
-  options: { value: string; label: string }[],
-) {
+function select(name: string, label: string, current: string | undefined, options: { value: string; label: string }[]) {
   return html`
     <label class="queue-filter__field">
       <span>${label}</span>
