@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS clips (
   url TEXT NOT NULL,
   published_at TEXT NOT NULL,
   duration_seconds INTEGER NOT NULL,
-  -- Starts as a duration<=60s guess; verify_shorts.ts confirms the real
+  -- Starts as a duration<=60s guess; the classify job confirms the real
   -- answer via the youtube.com/shorts/{id} redirect trick and flips
-  -- kind_verified so future collect runs stop overwriting it.
+  -- kind_verified so future imports stop overwriting it.
   kind TEXT NOT NULL CHECK (kind IN ('short', 'video')),
   kind_verified INTEGER NOT NULL DEFAULT 0,
   fetched_at TEXT NOT NULL DEFAULT (datetime('now'))

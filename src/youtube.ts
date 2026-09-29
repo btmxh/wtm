@@ -204,7 +204,7 @@ function parseIso8601Duration(duration: string): number {
 // youtube.com/shorts/{id} serves the page directly (200) for an actual
 // Short, and redirects (303) to /watch?v={id} for anything else. This is
 // scraping youtube.com itself, not the Data API, so it costs no quota but
-// isn't a documented endpoint - keep it out of the main collect path and
+// isn't a documented endpoint - keep it out of the main import path and
 // don't hammer it.
 export async function checkIsShort(videoId: string, signal?: AbortSignal): Promise<boolean> {
   const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, {

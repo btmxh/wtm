@@ -7,9 +7,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "collect": "node --env-file=.env src/collect.ts",
-    "verify-shorts": "node --env-file=.env src/verify-shorts.ts",
-    "autotag": "node --env-file=.env src/autotag.ts",
     "dev": "node --env-file=.env --watch src/server.ts",
     "lint": "biome check .",
     "format": "biome check --write .",

@@ -118,7 +118,7 @@ export function indexPage(opts: {
 
     ${
       clips.length === 0
-        ? html`<p class="empty">Nothing here yet. Run the collector, or loosen the filters.</p>`
+        ? html`<p class="empty">Nothing here yet. Import a clipper, or loosen the filters.</p>`
         : html`<div class="shelf">${clips.map((c) => clipCard(c, oshisByClip.get(c.id) ?? [], filterQuery))}</div>`
     }
   `;

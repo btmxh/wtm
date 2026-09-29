@@ -11,9 +11,6 @@ wtm is a single-user, self-hosted "oshi clip organizer": it crawls YouTube clipp
 The dev shell comes from the Nix flake (`nix develop`, or direnv via `.envrc`). It provides node, pnpm, and sqlite. Secrets live in `.env` (`YOUTUBE_API_KEY`, `TYPESAFE_API_KEY`), and every script loads it with `--env-file=.env`.
 
 - `pnpm dev`: start the server with `--watch` on port 4173 (override with `PORT`). Run it from the repo root, because static files are served from `./public`.
-- `pnpm collect`: CLI import. It seeds oshis from `config/oshis.json`, resolves the channels in `config/clippers.json`, and imports their uploads.
-- `pnpm verify-shorts`: CLI run of the short/video classify pass.
-- `pnpm autotag`: CLI run of the LLM tagging pass.
 - `pnpm lint`: Biome lint plus a format check over TS, JS, CSS and JSON (`biome.json`). `pnpm format` applies the formatting and the safe lint fixes.
 - `pnpm typecheck`: `tsc` with no emit. The `tsconfig.json` sets `erasableSyntaxOnly` and `allowImportingTsExtensions`, so it enforces the rules below.
 - `pnpm test`: the `node:test` suite in `test/*.test.ts`. DB tests use `openDb(":memory:")`, and no test calls the network or needs `.env`.
@@ -35,13 +32,13 @@ There is no build step or bundler. Node 24 runs TypeScript directly through its 
 
 `src/jobs.ts` is an in-memory job registry. It keeps the last 20 jobs, which are lost when the server restarts. Each job is `createJob(type, (report, signal) => ...)`. The work function reports progress, log lines, and `metaDelta` counters through `report`. It must check `signal.aborted` itself for cancellation to work. The `/jobs` and `/jobs/:id` pages get live updates over SSE (`/jobs/events`, `/jobs/:id/events`), which send a new snapshot every 750ms.
 
-Each job's logic is a `run*` function that takes a `(db, report, signal)` signature. The CLI scripts reuse the same functions and pass a `report` that just logs to the console.
+Each job's logic is a `run*` function that takes a `(db, report, signal)` signature.
 - `importJob.ts` (`runImport`): fetches a clipper's uploads playlist through the YouTube Data API (`src/youtube.ts`), then matches oshis by case-insensitive alias substring against the title, or the title plus description. The description is first cleaned by per-clipper functions in `CLIPPER_DESCRIPTION_CLEANERS`, keyed by handle. When an import finishes, a classify job starts automatically.
 - `classifyJob.ts` (`runClassify`): confirms short vs. video for unverified clips with the `youtube.com/shorts/{id}` redirect check. It uses 5 concurrent workers. A clip that fails is skipped and retried on the next run, and the failure does not stop the job.
 - `autotagJob.ts` (`runAutotag`): for each clip, it asks the TypeSafe System One API (`src/typesafe.ts`) one batched yes/no question per unattached tag that has a `prompt`. Tags with a confidence of 0.7 or higher are attached with `source = 'llm'`.
 
 ### Product decisions to respect
 
-- Tags are a fixed vocabulary that is managed only through the `/tags` web UI. Do not add a config-file seeding path for tags. Oshis can be added through the `/oshis` page and the import page, and also through `config/oshis.json` (for `pnpm collect`).
+- Tags are a fixed vocabulary that is managed only through the `/tags` web UI. Do not add a config-file seeding path for tags. Oshis are added through the `/oshis` page and the import page.
 - There is no separate "groups" concept, because a group is just a tag. `migrate()` drops the old `groups`/`oshi_groups` tables.
 - The app is used from a phone over Tailscale, and it has no auth. Treat it as private and do not expose it publicly.
