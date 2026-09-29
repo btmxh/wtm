@@ -875,26 +875,130 @@ main {
   padding-left: 0.35rem;
 }
 
-/* Portrait / narrow windows: sidebar drops below the stage. */
-@media (max-aspect-ratio: 1/1), (max-width: 56rem) {
+.feed__peek,
+.feed__scrim,
+.feed__sheet-grab {
+  display: none;
+}
+
+/* Portrait / narrow windows: the stage takes the whole screen bar a
+   one-line peek, and the sidebar becomes a bottom sheet over the stage.
+   (Landscape phones keep the side-by-side layout - stacking there left
+   the video a sliver.) */
+@media (max-aspect-ratio: 1/1), (max-width: 40rem) {
   .feed {
-    grid-template-columns: 1fr;
+    /* minmax(0) so the peek's nowrap title can't widen the column */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
   }
 
+  .feed-slide {
+    padding: 0;
+  }
+
+  .feed-slide__frame {
+    border-radius: 0;
+  }
+
+  .feed__peek {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border: none;
+    border-top: 1px solid var(--line);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .feed__peek-pos,
+  .feed__peek-more {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+
+  .feed__peek-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 600;
+  }
+
+  .feed__scrim:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
   .feed__sidebar {
-    max-height: 42dvh;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 130;
+    /* the top of the clip stays visible (and playing) above the sheet */
+    max-height: 80dvh;
+    padding: 0 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    gap: 1.25rem;
+    background: var(--bg);
     border-left: none;
     border-top: 1px solid var(--line);
-    padding: 0.75rem 1.25rem 1.25rem;
+    border-radius: 1rem 1rem 0 0;
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0s linear 0.25s;
+  }
+
+  .feed--sheet-open .feed__sidebar {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.25s ease;
+  }
+
+  /* Grab handle, sticky so the sheet can always be dismissed from the top. */
+  .feed__sheet-grab {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    width: calc(100% + 2.5rem);
+    margin: 0 -1.25rem -0.5rem;
+    height: 1.75rem;
+    background: var(--bg);
+    border: none;
+    cursor: pointer;
+  }
+
+  .feed__sheet-grab::before {
+    content: "";
+    display: block;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: var(--line);
   }
 
   .queue-bar {
     padding-right: 0;
   }
 
-  .feed-slide {
-    padding: 0.5rem;
+  .feed__panel .takeaway {
+    padding: 1rem;
   }
 }
 

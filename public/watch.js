@@ -17,6 +17,11 @@
   const upNextList = feed.querySelector(".up-next__list");
   const closeLink = document.querySelector(".watch-overlay__close");
   const endPanel = document.getElementById("feed-end-panel");
+  const peek = feed.querySelector(".feed__peek");
+  const peekPos = feed.querySelector(".feed__peek-pos");
+  const peekTitle = feed.querySelector(".feed__peek-title");
+  const scrim = feed.querySelector(".feed__scrim");
+  const sheetGrab = feed.querySelector(".feed__sheet-grab");
 
   // Virtualization: the queue can be 1000+ clips, but only slides within
   // SLIDE_RADIUS of the current one exist in the DOM (as thumbnails), and
@@ -232,6 +237,8 @@
 
   function updateChrome() {
     posEl.textContent = `${Math.min(cur + 1, queue.length)} / ${queue.length}`;
+    peekPos.textContent = posEl.textContent;
+    peekTitle.textContent = cur < queue.length ? queue[cur].title : "End of queue";
     if (closeLink) closeLink.href = `/${qs()}`;
     if (cur < queue.length) {
       history.replaceState(null, "", `/watch/${queue[cur].id}${qs()}`);
@@ -370,7 +377,25 @@
     stage.scrollTo({ top: cur * slideHeight(), behavior: "instant" });
   }).observe(stage);
 
+  // ---- portrait bottom sheet ----
+  //
+  // On wide screens the sidebar is always visible and none of this shows;
+  // in portrait it's a sheet over the stage, opened from the peek bar.
+  function setSheet(open) {
+    feed.classList.toggle("feed--sheet-open", open);
+    peek.setAttribute("aria-expanded", String(open));
+    scrim.hidden = !open;
+  }
+
+  peek.addEventListener("click", () => setSheet(true));
+  scrim.addEventListener("click", () => setSheet(false));
+  sheetGrab.addEventListener("click", () => setSheet(false));
+
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && feed.classList.contains("feed--sheet-open")) {
+      setSheet(false);
+      return;
+    }
     if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
     const down = event.key === "ArrowDown" || event.key === "j";
     const up = event.key === "ArrowUp" || event.key === "k";

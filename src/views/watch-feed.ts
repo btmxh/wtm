@@ -80,7 +80,17 @@ export function watchFeedPage(opts: {
           <div class="feed__track"></div>
         </div>
 
-        <aside class="feed__sidebar">
+        <!-- Portrait only: the sidebar collapses into a bottom sheet, and
+             this bar is what stays visible under the stage to open it. -->
+        <button type="button" class="feed__peek" aria-expanded="false" aria-controls="feed-sidebar">
+          <span class="feed__peek-pos">${start + 1} / ${queue.length}</span>
+          <span class="feed__peek-title">${queue[start]?.title ?? ""}</span>
+          <span class="feed__peek-more" aria-hidden="true">details &uarr;</span>
+        </button>
+        <div class="feed__scrim" hidden></div>
+
+        <aside class="feed__sidebar" id="feed-sidebar">
+          <button type="button" class="feed__sheet-grab" aria-label="Close details"></button>
           <div class="queue-bar">
             <span class="queue-bar__pos">${start + 1} / ${queue.length}</span>
             <details class="queue-filter">
