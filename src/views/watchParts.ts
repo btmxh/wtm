@@ -3,33 +3,38 @@ import { formatDate, formatDuration } from "../format.ts";
 import { oshiAccent } from "../oshiColor.ts";
 import type { ClipDetail, Tag } from "../queries.ts";
 
-// The active shelf filters, carried through watch mode via query params and
+// The active queue filters, carried through watch mode via query params and
 // hidden form fields so mutations (tag/watch) redirect back into the same
 // filtered queue instead of resetting it.
 export interface FilterQuery {
   oshi?: string;
   clipper?: string;
   tag?: string;
+  kind?: "short" | "video";
   watched?: "watched" | "unwatched";
+  order?: "oldest" | "random";
+  // Only meaningful with order=random - keeps a shuffle stable across
+  // reloads and non-JS form round-trips.
+  seed?: string;
 }
+
+const FILTER_KEYS = ["oshi", "clipper", "tag", "kind", "watched", "order", "seed"] as const;
 
 export function filterQueryString(f: FilterQuery): string {
   const qs = new URLSearchParams();
-  if (f.oshi) qs.set("oshi", f.oshi);
-  if (f.clipper) qs.set("clipper", f.clipper);
-  if (f.tag) qs.set("tag", f.tag);
-  if (f.watched) qs.set("watched", f.watched);
+  for (const key of FILTER_KEYS) {
+    const value = f[key];
+    if (value) qs.set(key, value);
+  }
   const s = qs.toString();
   return s ? `?${s}` : "";
 }
 
 function hiddenFilterInputs(f: FilterQuery) {
-  return html`
-    ${f.oshi ? html`<input type="hidden" name="oshi" value="${f.oshi}" />` : html``}
-    ${f.clipper ? html`<input type="hidden" name="clipper" value="${f.clipper}" />` : html``}
-    ${f.tag ? html`<input type="hidden" name="tag" value="${f.tag}" />` : html``}
-    ${f.watched ? html`<input type="hidden" name="watched" value="${f.watched}" />` : html``}
-  `;
+  return FILTER_KEYS.map((key) => {
+    const value = f[key];
+    return value ? html`<input type="hidden" name="${key}" value="${value}" />` : html``;
+  });
 }
 
 export function oshiPills(clip: ClipDetail) {
@@ -42,18 +47,6 @@ export function oshiPills(clip: ClipDetail) {
           </span>
         `,
       )}
-    </div>
-  `;
-}
-
-// A compact, non-interactive rendering of a clip's attached tags - used in
-// the shorts feed's always-visible chrome, where the full tagsBlock (with
-// its add-form) is too tall to sit on top of the video.
-export function tagChipsPreview(clip: ClipDetail) {
-  if (clip.tags.length === 0) return html``;
-  return html`
-    <div class="chip-row">
-      ${clip.tags.map((t) => html`<span class="chip">${t.name}</span>`)}
     </div>
   `;
 }

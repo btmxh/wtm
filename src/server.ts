@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { html } from "./html.ts";
 import { openDb, listOshis, upsertOshi } from "./db.ts";
@@ -22,12 +22,12 @@ import {
   getOshiTagBreakdown,
   getWatchHeatmap,
   type ClipFilters,
+  type ClipListItem,
   type TagProgress,
 } from "./queries.ts";
 import { layout } from "./views/layout.ts";
 import { indexPage } from "./views/index.ts";
-import { watchShortsPage } from "./views/watch-shorts.ts";
-import { watchTheaterPage } from "./views/watch-theater.ts";
+import { watchFeedPage, clipPanel, type FeedItem } from "./views/watch-feed.ts";
 import { filterQueryString, type FilterQuery } from "./views/watchParts.ts";
 import { tagsPage } from "./views/tags.ts";
 import { importPage } from "./views/import.ts";
@@ -40,21 +40,74 @@ import { runAutotag } from "./autotagJob.ts";
 import { runClassify } from "./classifyJob.ts";
 
 function filtersFromQuery(q: Record<string, string>): FilterQuery {
+  const order = q.order === "oldest" || q.order === "random" ? q.order : undefined;
   return {
     oshi: q.oshi || undefined,
     clipper: q.clipper || undefined,
     tag: q.tag || undefined,
+    kind: q.kind === "short" || q.kind === "video" ? q.kind : undefined,
     watched: q.watched === "watched" || q.watched === "unwatched" ? q.watched : undefined,
+    order,
+    seed: order === "random" && /^\d+$/.test(q.seed ?? "") ? q.seed : undefined,
   };
 }
 
 function filtersFromForm(form: Record<string, unknown>): FilterQuery {
-  return filtersFromQuery({
-    oshi: form.oshi ? String(form.oshi) : "",
-    clipper: form.clipper ? String(form.clipper) : "",
-    tag: form.tag ? String(form.tag) : "",
-    watched: form.watched ? String(form.watched) : "",
+  const q: Record<string, string> = {};
+  for (const [k, v] of Object.entries(form)) if (typeof v === "string") q[k] = v;
+  return filtersFromQuery(q);
+}
+
+// Deterministic shuffle (mulberry32-driven Fisher-Yates) so a given seed
+// always yields the same order - a reload or a non-JS form round-trip lands
+// back in the same shuffled queue.
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  let a = seed >>> 0;
+  const rand = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+function buildQueue(filters: FilterQuery): ClipListItem[] {
+  const clips = listClips(db, {
+    oshiId: filters.oshi ? Number(filters.oshi) : undefined,
+    clipperId: filters.clipper ? Number(filters.clipper) : undefined,
+    tagId: filters.tag ? Number(filters.tag) : undefined,
+    kind: filters.kind,
+    watched: filters.watched,
   });
+  if (filters.order === "oldest") clips.reverse();
+  else if (filters.order === "random") seededShuffle(clips, Number(filters.seed ?? 0));
+  return clips;
+}
+
+function toFeedItem(c: { id: number; videoId: string; kind: "short" | "video"; title: string }): FeedItem {
+  return { id: c.id, videoId: c.videoId, kind: c.kind, title: c.title };
+}
+
+function panelFor(id: number, filters: FilterQuery) {
+  const clip = getClip(db, id);
+  if (!clip) return undefined;
+  const attached = new Set(clip.tags.map((t) => t.id));
+  const availableTags = listTags(db).filter((t) => !attached.has(t.id));
+  return clipPanel(clip, availableTags, filters);
+}
+
+// Mutations from the feed sidebar are posted via fetch (so the playing clip
+// isn't torn down by a page load) and only need an ack; plain form posts
+// still get the redirect back into watch mode.
+function mutationResponse(c: Context, id: number, form: Record<string, unknown>) {
+  if (c.req.header("x-wtm-fetch")) return c.body(null, 204);
+  return c.redirect(`/watch/${id}${filterQueryString(filtersFromForm(form))}`, 303);
 }
 
 // Watch mode embeds a YouTube player, which needs its own domains warmed up
@@ -99,42 +152,42 @@ app.get("/watch/:id", (c) => {
   if (!clip) return c.notFound();
 
   const filters = filtersFromQuery(c.req.query());
-  const queueFilters: ClipFilters = {
-    oshiId: filters.oshi ? Number(filters.oshi) : undefined,
-    clipperId: filters.clipper ? Number(filters.clipper) : undefined,
-    tagId: filters.tag ? Number(filters.tag) : undefined,
-    kind: clip.kind,
-    watched: filters.watched,
-  };
-  const queueClips = listClips(db, queueFilters);
-  const index = queueClips.findIndex((qc) => qc.id === id);
+  if (filters.order === "random" && !filters.seed) filters.seed = String(Math.floor(Math.random() * 1e9));
 
-  const oshis = listOshiSummaries(db);
-  const allTags = listTags(db);
-
-  if (clip.kind === "short") {
-    const details = queueClips.map((qc) => getClip(db, qc.id)!);
-    const availableTagsByClip = new Map(
-      details.map((d) => [d.id, allTags.filter((t) => !d.tags.some((dt) => dt.id === t.id))]),
-    );
-    const body = watchShortsPage({ clips: details, availableTagsByClip, filters });
-    return c.html(layout({ title: clip.title, oshis, body, head: watchHead }));
+  const queue = buildQueue(filters).map(toFeedItem);
+  let start = queue.findIndex((qc) => qc.id === id);
+  // A shuffled queue starts at the clip that was clicked; otherwise start
+  // wherever it sits so its newer/older neighbors are one swipe away. A clip
+  // the filters exclude still gets played first.
+  if (start === -1 || filters.order === "random") {
+    if (start !== -1) queue.splice(start, 1);
+    queue.unshift(toFeedItem(clip));
+    start = 0;
   }
 
-  const prevId = index > 0 ? queueClips[index - 1].id : undefined;
-  const nextId = index >= 0 && index < queueClips.length - 1 ? queueClips[index + 1].id : undefined;
-  const attachedTagIds = new Set(clip.tags.map((t) => t.id));
-  const availableTags = allTags.filter((t) => !attachedTagIds.has(t.id));
-
-  const body = watchTheaterPage({
-    clip,
-    availableTags,
-    prevId,
-    nextId,
-    position: { index: Math.max(index, 0), total: queueClips.length },
+  const oshis = listOshiSummaries(db);
+  const body = watchFeedPage({
+    queue,
+    start,
+    firstPanel: panelFor(id, filters)!,
     filters,
+    oshis,
+    clippers: listClipperSummaries(db),
+    tags: listTags(db),
   });
   return c.html(layout({ title: clip.title, oshis, body, head: watchHead }));
+});
+
+// The feed's "filter up next" - returns the new queue for watch.js to splice
+// in after the clip that's currently playing.
+app.get("/api/queue", (c) => {
+  return c.json(buildQueue(filtersFromQuery(c.req.query())).map(toFeedItem));
+});
+
+app.get("/clips/:id/panel", (c) => {
+  const panel = panelFor(Number(c.req.param("id")), filtersFromQuery(c.req.query()));
+  if (!panel) return c.notFound();
+  return c.html(panel.value);
 });
 
 app.post("/clips/:id/watch", async (c) => {
@@ -142,7 +195,7 @@ app.post("/clips/:id/watch", async (c) => {
   const form = await c.req.parseBody();
   const takeaway = String(form.takeaway ?? "").trim();
   if (takeaway) markWatched(db, id, takeaway);
-  return c.redirect(`/watch/${id}${filterQueryString(filtersFromForm(form))}#short-${id}`, 303);
+  return mutationResponse(c, id, form);
 });
 
 app.post("/clips/:id/tags", async (c) => {
@@ -150,7 +203,7 @@ app.post("/clips/:id/tags", async (c) => {
   const form = await c.req.parseBody();
   const tagId = Number(form.tagId);
   if (tagId) attachTagToClip(db, id, tagId);
-  return c.redirect(`/watch/${id}${filterQueryString(filtersFromForm(form))}#short-${id}`, 303);
+  return mutationResponse(c, id, form);
 });
 
 app.post("/clips/:id/tags/:tagId/delete", async (c) => {
@@ -158,7 +211,7 @@ app.post("/clips/:id/tags/:tagId/delete", async (c) => {
   const tagId = Number(c.req.param("tagId"));
   const form = await c.req.parseBody();
   removeTagFromClip(db, id, tagId);
-  return c.redirect(`/watch/${id}${filterQueryString(filtersFromForm(form))}#short-${id}`, 303);
+  return mutationResponse(c, id, form);
 });
 
 app.get("/tags", (c) => {
@@ -188,6 +241,27 @@ app.post("/tags/:id/delete", (c) => {
   const id = Number(c.req.param("id"));
   deleteTag(db, id);
   return c.redirect("/tags", 303);
+});
+
+app.get("/oshis", (c) => {
+  const oshis = listOshiSummaries(db);
+  const rows: OshiRowWithCounts[] = listOshis(db).map((o) => {
+    const summary = oshis.find((s) => s.id === o.id);
+    return { ...o, clipCount: summary?.clipCount ?? 0, watchedCount: summary?.watchedCount ?? 0 };
+  });
+  const body = oshisPage(rows);
+  return c.html(layout({ title: "oshis · wtm", oshis, body }));
+});
+
+app.post("/oshis", async (c) => {
+  const form = await c.req.parseBody();
+  const name = String(form.name ?? "").trim();
+  const aliases = String(form.aliases ?? "")
+    .split(",")
+    .map((a) => a.trim())
+    .filter(Boolean);
+  if (name && aliases.length > 0) upsertOshi(db, name, aliases);
+  return c.redirect("/oshis", 303);
 });
 
 app.get("/stats", (c) => {
@@ -243,27 +317,6 @@ app.post("/import/oshis", async (c) => {
   if (name && aliases.length > 0) upsertOshi(db, name, aliases);
 
   const qs = new URLSearchParams();
-app.get("/oshis", (c) => {
-  const oshis = listOshiSummaries(db);
-  const rows: OshiRowWithCounts[] = listOshis(db).map((o) => {
-    const summary = oshis.find((s) => s.id === o.id);
-    return { ...o, clipCount: summary?.clipCount ?? 0, watchedCount: summary?.watchedCount ?? 0 };
-  });
-  const body = oshisPage(rows);
-  return c.html(layout({ title: "oshis · wtm", oshis, body }));
-});
-
-app.post("/oshis", async (c) => {
-  const form = await c.req.parseBody();
-  const name = String(form.name ?? "").trim();
-  const aliases = String(form.aliases ?? "")
-    .split(",")
-    .map((a) => a.trim())
-    .filter(Boolean);
-  if (name && aliases.length > 0) upsertOshi(db, name, aliases);
-  return c.redirect("/oshis", 303);
-});
-
   if (form.clipperId) qs.set("clipperId", String(form.clipperId));
   if (form.handle) qs.set("handle", String(form.handle));
   if (form.title) qs.set("title", String(form.title));
@@ -300,10 +353,30 @@ app.post("/jobs/classify", (c) => {
   return c.redirect(`/jobs/${job.id}`, 303);
 });
 
+app.post("/jobs/:id/cancel", (c) => {
+  const id = c.req.param("id");
+  cancelJob(id);
+  return c.redirect(`/jobs/${id}`, 303);
+});
+
 app.get("/jobs", (c) => {
   const oshis = listOshiSummaries(db);
   const body = jobsListPage(listJobs());
   return c.html(layout({ title: "jobs · wtm", oshis, body }));
+});
+
+app.get("/jobs/events", (c) => {
+  return streamSSE(c, async (stream) => {
+    let lastSnapshot = "";
+    while (!stream.aborted) {
+      const snapshot = JSON.stringify(listJobs());
+      if (snapshot !== lastSnapshot) {
+        await stream.writeSSE({ data: snapshot });
+        lastSnapshot = snapshot;
+      }
+      await stream.sleep(750);
+    }
+  });
 });
 
 app.get("/jobs/:id", (c) => {
@@ -338,23 +411,3 @@ const port = Number(process.env.PORT ?? 4173);
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`wtm running at http://localhost:${info.port}`);
 });
-app.post("/jobs/:id/cancel", (c) => {
-  const id = c.req.param("id");
-  cancelJob(id);
-  return c.redirect(`/jobs/${id}`, 303);
-});
-
-app.get("/jobs/events", (c) => {
-  return streamSSE(c, async (stream) => {
-    let lastSnapshot = "";
-    while (!stream.aborted) {
-      const snapshot = JSON.stringify(listJobs());
-      if (snapshot !== lastSnapshot) {
-        await stream.writeSSE({ data: snapshot });
-        lastSnapshot = snapshot;
-      }
-      await stream.sleep(750);
-    }
-  });
-});
-
