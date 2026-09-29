@@ -5,6 +5,7 @@
   "scripts": {
     "collect": "node --env-file=.env --experimental-strip-types src/collect.ts",
     "verify-shorts": "node --env-file=.env --experimental-strip-types src/verify-shorts.ts",
+    "autotag": "node --env-file=.env --experimental-strip-types src/autotag.ts",
     "dev": "node --env-file=.env --experimental-strip-types --watch src/server.ts"
   },
   "dependencies": {

@@ -20,21 +20,6 @@ CREATE TABLE IF NOT EXISTS oshis (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- User-defined buckets of oshis (generations, units, etc. - TBD).
--- Completion rate per group is computed later from watches, not stored.
-CREATE TABLE IF NOT EXISTS groups (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS oshi_groups (
-  oshi_id INTEGER NOT NULL REFERENCES oshis(id) ON DELETE CASCADE,
-  group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-  PRIMARY KEY (oshi_id, group_id)
-);
-
 -- Crawled videos and shorts.
 CREATE TABLE IF NOT EXISTS clips (
   id INTEGER PRIMARY KEY,
@@ -67,10 +52,14 @@ CREATE TABLE IF NOT EXISTS clip_oshis (
   PRIMARY KEY (clip_id, oshi_id)
 );
 
--- Free-form tags (manual now, LLM-assigned later).
+-- Pre-made vocabulary, managed via the /tags web UI (create/rename/delete) -
+-- not created ad hoc while tagging a clip. `prompt` is an optional criterion
+-- an LLM auto-tagger will use later to decide whether a clip matches; NULL
+-- until that lands.
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  prompt TEXT
 );
 
 CREATE TABLE IF NOT EXISTS clip_tags (

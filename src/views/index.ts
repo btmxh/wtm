@@ -1,15 +1,18 @@
 import { html } from "../html.ts";
 import { formatDuration } from "../format.ts";
 import { oshiAccent } from "../oshiColor.ts";
-import type { ClipFilters, ClipListItem, ClipOshiLink, ClipperSummary } from "../queries.ts";
+import type { ClipFilters, ClipListItem, ClipOshiLink, ClipperSummary, TagSummary } from "../queries.ts";
 
-function clipCard(clip: ClipListItem, oshis: ClipOshiLink[]) {
+function clipCard(clip: ClipListItem, oshis: ClipOshiLink[], filterQuery: string) {
   const dots = oshis.map(
     (o) => html`<span class="dot" style="--accent: ${oshiAccent(o.name)}" title="${o.name}"></span>`,
   );
 
   return html`
-    <a class="card card--${clip.kind} ${clip.watched ? "card--watched" : "card--unwatched"}" href="/clips/${clip.id}">
+    <a
+      class="card card--${clip.kind} ${clip.watched ? "card--watched" : "card--unwatched"}"
+      href="/watch/${clip.id}${filterQuery}"
+    >
       <span class="card__thumb">
         <img src="https://i.ytimg.com/vi/${clip.videoId}/hqdefault.jpg" alt="" loading="lazy" />
         <span class="card__duration">${formatDuration(clip.durationSeconds)}</span>
@@ -28,10 +31,12 @@ export function indexPage(opts: {
   clips: ClipListItem[];
   oshisByClip: Map<number, ClipOshiLink[]>;
   clippers: ClipperSummary[];
+  tags: TagSummary[];
   filters: ClipFilters;
   oshiId?: number;
+  filterQuery: string;
 }) {
-  const { clips, oshisByClip, clippers, filters, oshiId } = opts;
+  const { clips, oshisByClip, clippers, tags, filters, oshiId, filterQuery } = opts;
 
   const kindOptions: { value: ClipFilters["kind"] | ""; label: string }[] = [
     { value: "", label: "All" },
@@ -94,11 +99,25 @@ export function indexPage(opts: {
         </select>
       </label>
 
+      <label class="filter-select">
+        <span>Tag</span>
+        <select name="tag">
+          <option value="">All</option>
+          ${tags.map(
+            (t) => html`
+              <option value="${t.id}" ${filters.tagId === t.id ? "selected" : ""}>
+                ${t.name} (${t.clipCount})
+              </option>
+            `,
+          )}
+        </select>
+      </label>
+
       <button type="submit">Filter</button>
     </form>
 
     ${clips.length === 0
       ? html`<p class="empty">Nothing here yet. Run the collector, or loosen the filters.</p>`
-      : html`<div class="shelf">${clips.map((c) => clipCard(c, oshisByClip.get(c.id) ?? []))}</div>`}
+      : html`<div class="shelf">${clips.map((c) => clipCard(c, oshisByClip.get(c.id) ?? [], filterQuery))}</div>`}
   `;
 }

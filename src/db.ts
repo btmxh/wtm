@@ -20,6 +20,21 @@ function migrate(db: DatabaseSync): void {
   if (!columns.some((c) => c.name === "kind_verified")) {
     db.exec("ALTER TABLE clips ADD COLUMN kind_verified INTEGER NOT NULL DEFAULT 0");
   }
+
+  // groups/oshi_groups were scaffolded, then dropped in favor of tags - drop
+  // them here for dbs created before that decision.
+  db.exec("DROP TABLE IF EXISTS oshi_groups");
+  db.exec("DROP TABLE IF EXISTS groups");
+
+  const tagsTable = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tags'")
+    .get();
+  if (tagsTable) {
+    const tagColumns = db.prepare("PRAGMA table_info(tags)").all() as { name: string }[];
+    if (!tagColumns.some((c) => c.name === "prompt")) {
+      db.exec("ALTER TABLE tags ADD COLUMN prompt TEXT");
+    }
+  }
 }
 
 export function openDb(path = DEFAULT_DB_PATH): DatabaseSync {
@@ -45,6 +60,17 @@ export function upsertOshi(db: DatabaseSync, name: string, aliases: string[]): n
     )
     .get(name, JSON.stringify(aliases)) as { id: number };
   return row.id;
+}
+
+export function listOshisByIds(db: DatabaseSync, ids: number[]): OshiRow[] {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map((_, i) => `:id${i}`).join(",");
+  const params: Record<string, unknown> = {};
+  ids.forEach((id, i) => (params[`id${i}`] = id));
+  const rows = db
+    .prepare(`SELECT id, name, aliases FROM oshis WHERE id IN (${placeholders})`)
+    .all(params) as unknown as { id: number; name: string; aliases: string }[];
+  return rows.map((r) => ({ id: r.id, name: r.name, aliases: JSON.parse(r.aliases) }));
 }
 
 export function listOshis(db: DatabaseSync): OshiRow[] {
@@ -121,6 +147,15 @@ export function upsertClip(db: DatabaseSync, clip: ClipInput): number {
   return row.id;
 }
 
+export function getClipperById(db: DatabaseSync, id: number): ClipperRow | undefined {
+  return db
+    .prepare(
+      `SELECT id, handle, channel_id AS channelId, title, uploads_playlist_id AS uploadsPlaylistId
+       FROM clippers WHERE id = ?`,
+    )
+    .get(id) as ClipperRow | undefined;
+}
+
 export function countClipsByKind(db: DatabaseSync, clipperId: number): { short: number; video: number } {
   const rows = db
     .prepare("SELECT kind, COUNT(*) AS n FROM clips WHERE clipper_id = ? GROUP BY kind")
@@ -154,4 +189,43 @@ export function setHeuristicClipOshis(db: DatabaseSync, clipId: number, oshiIds:
     "INSERT OR IGNORE INTO clip_oshis (clip_id, oshi_id, source) VALUES (?, ?, 'heuristic')",
   );
   for (const oshiId of oshiIds) insert.run(clipId, oshiId);
+}
+
+export interface ClipForTagging {
+  id: number;
+  title: string;
+  description: string;
+}
+
+export function listClipsForTagging(db: DatabaseSync): ClipForTagging[] {
+  return db.prepare("SELECT id, title, description FROM clips").all() as unknown as ClipForTagging[];
+}
+
+export interface TagForTagging {
+  id: number;
+  name: string;
+  prompt: string;
+}
+
+// Only tags with a prompt can be auto-tagged against - there's no criterion
+// to judge otherwise.
+export function listTaggableTags(db: DatabaseSync): TagForTagging[] {
+  return db
+    .prepare("SELECT id, name, prompt FROM tags WHERE prompt IS NOT NULL AND trim(prompt) != ''")
+    .all() as unknown as TagForTagging[];
+}
+
+export function listAttachedTagIds(db: DatabaseSync, clipId: number): Set<number> {
+  const rows = db.prepare("SELECT tag_id FROM clip_tags WHERE clip_id = ?").all(clipId) as {
+    tag_id: number;
+  }[];
+  return new Set(rows.map((r) => r.tag_id));
+}
+
+// Records an LLM judgment as a clip_tags row - only called for tags not
+// already linked to the clip by any source, so no conflict handling needed.
+export function setLlmClipTag(db: DatabaseSync, clipId: number, tagId: number, confidence: number): void {
+  db.prepare(
+    "INSERT OR IGNORE INTO clip_tags (clip_id, tag_id, source, confidence) VALUES (?, ?, 'llm', ?)",
+  ).run(clipId, tagId, confidence);
 }

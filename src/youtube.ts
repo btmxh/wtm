@@ -31,6 +31,20 @@ export interface ChannelInfo {
   title: string;
   description: string;
   uploadsPlaylistId: string;
+  // Not present when a channel has never set a handle - callers should fall
+  // back to channelId as a unique clippers.handle value in that case.
+  handle?: string;
+}
+
+function channelInfoFromItem(item: any): ChannelInfo {
+  const customUrl: string | undefined = item.snippet.customUrl;
+  return {
+    channelId: item.id,
+    title: item.snippet.title,
+    description: item.snippet.description,
+    uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+    handle: customUrl ? customUrl.replace(/^@/, "") : undefined,
+  };
 }
 
 export async function resolveChannel(handle: string): Promise<ChannelInfo> {
@@ -40,13 +54,65 @@ export async function resolveChannel(handle: string): Promise<ChannelInfo> {
   });
   const item = data.items?.[0];
   if (!item) throw new Error(`No channel found for handle @${handle}`);
+  return channelInfoFromItem(item);
+}
 
-  return {
-    channelId: item.id,
-    title: item.snippet.title,
-    description: item.snippet.description,
-    uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
-  };
+export async function resolveChannelById(channelId: string): Promise<ChannelInfo> {
+  const data = await apiGet("channels", {
+    part: "snippet,contentDetails",
+    id: channelId,
+  });
+  const item = data.items?.[0];
+  if (!item) throw new Error(`No channel found for id ${channelId}`);
+  return channelInfoFromItem(item);
+}
+
+export async function resolveChannelForVideo(videoId: string): Promise<ChannelInfo> {
+  const data = await apiGet("videos", { part: "snippet", id: videoId });
+  const item = data.items?.[0];
+  if (!item) throw new Error(`No video found for id ${videoId}`);
+  return resolveChannelById(item.snippet.channelId);
+}
+
+export interface ParsedYoutubeUrl {
+  kind: "handle" | "channel" | "video";
+  value: string;
+}
+
+// Accepts a channel URL (@handle or /channel/UC...) or a video/short URL
+// (watch?v=, youtu.be/, /shorts/) and pulls out the bit that identifies it,
+// so the caller can decide which resolver to call.
+export function parseYoutubeUrl(input: string): ParsedYoutubeUrl {
+  const trimmed = input.trim();
+  let url: URL;
+  try {
+    url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+  } catch {
+    throw new Error(`Not a valid URL: ${input}`);
+  }
+
+  if (url.hostname === "youtu.be") {
+    const videoId = url.pathname.slice(1).split("/")[0];
+    if (videoId) return { kind: "video", value: videoId };
+  }
+
+  const parts = url.pathname.split("/").filter(Boolean);
+
+  if (parts[0] === "watch") {
+    const videoId = url.searchParams.get("v");
+    if (videoId) return { kind: "video", value: videoId };
+  }
+  if (parts[0] === "shorts" && parts[1]) {
+    return { kind: "video", value: parts[1] };
+  }
+  if (parts[0] === "channel" && parts[1]) {
+    return { kind: "channel", value: parts[1] };
+  }
+  if (parts[0]?.startsWith("@")) {
+    return { kind: "handle", value: parts[0].slice(1) };
+  }
+
+  throw new Error(`Could not parse a channel or video from: ${input}`);
 }
 
 export interface PlaylistVideo {
